@@ -1,0 +1,22 @@
+[
+  {
+    "inicio_prueba": 0.0,
+    "inicio_fuente": 0.0,
+    "duracion": 2.5
+  },
+  {
+    "inicio_prueba": 2.5,
+    "inicio_fuente": 11.0,
+    "duracion": 2.5
+  },
+  {
+    "inicio_prueba": 5.0,
+    "inicio_fuente": 22.166666666666668,
+    "duracion": 3.0
+  },
+  {
+    "inicio_prueba": 8.0,
+    "inicio_fuente": 51.666666666666664,
+    "duracion": 2.0
+  }
+]
