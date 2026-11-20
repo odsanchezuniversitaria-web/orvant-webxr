@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0908">
+  <title>La cantera · Proyección privada</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./interfaz.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+  <canvas id="vista" aria-label="Vista de la cantera"></canvas>
+  <section id="acceso" aria-labelledby="titulo">
+    <div class="tarjeta">
+      <h1 id="titulo">La cantera</h1>
+      <p id="estado" role="status">Preparando la sala…</p>
+      <progress id="carga" aria-label="Carga del comercial" max="1"></progress>
+      <button id="entrar" disabled>Entrar</button>
+      <p id="ayuda">En el visor, usa el gatillo para pausar.</p>
+      <a id="original" href="?video=original" hidden>Ver el comercial original en 2D</a>
+      <details id="opciones">
+        <summary>Opciones de revisión</summary>
+        <div class="ajustes">
+          <label for="pelicula">Película</label>
+          <select id="pelicula">
+            <option value="suave">Prueba 3D · suave</option>
+            <option value="media">Prueba 3D · media</option>
+            <option value="intensa">Prueba 3D · intensa</option>
+            <option value="original">Comercial original · 2D</option>
+            <option value="hsbs">Prueba 3D · media ligera (HSBS)</option>
+          </select>
+          <label for="modo">Proyección</label>
+          <select id="modo">
+            <option value="proyeccion">Sobre la piedra</option>
+            <option value="nitido">Nítida · capa del visor</option>
+          </select>
+          <label class="check"><input id="contador" type="checkbox"> Mostrar contador de FPS</label>
+        </div>
+      </details>
+    </div>
+  </section>
+  <button id="volver" hidden>Salir de la vista</button>
+  <div id="perfume-pc" role="group" aria-label="Perfume ORVANT" hidden>
+    <button id="tomar" title="Tomar el frasco (E)">Tomar ORVANT</button>
+    <button id="pulverizar" title="Pulverizar (F)" hidden>Pulverizar</button>
+    <button id="dejar" title="Dejar el frasco en la mesa (E)" hidden>Dejar en la mesa</button>
+  </div>
+  <output id="mensaje" hidden aria-live="polite"></output>
+  <video id="comercial" playsinline preload="auto" hidden></video>
+  <noscript>Activa JavaScript para entrar en la cantera.</noscript>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
