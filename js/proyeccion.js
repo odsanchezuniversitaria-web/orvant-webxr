@@ -113,6 +113,7 @@ export function crearProyeccion(scene, video, mono, roca) {
 
   let media = null;
   let detalle = 'Proyección';
+  let productoEnMano = false;
   let sesionMedia = null, capasMundo = [], aceptaOpacidad = false, solicitada = false;
   function componer(mostrar) {
     if (solicitada === mostrar) return;
@@ -166,11 +167,13 @@ export function crearProyeccion(scene, video, mono, roca) {
     },
     cerrar() { quitarMedia(); detalle = 'Proyección'; },
     get modo() {
+      if(media && productoEnMano)return 'Proyección · frasco en mano';
       return media && !aceptaOpacidad && intensidad.value>0 && intensidad.value<0.9999
         ? 'Nítido · transición en proyección' : detalle;
     },
-    actualizar(valor,promedio,fuente=mono?video.currentTime:null) {
+    actualizar(valor,promedio,fuente=mono?video.currentTime:null,primerPlano=false) {
       intensidad.value = valor;
+      productoEnMano=primerPlano;
       negros.value=promedio?THREE.MathUtils.smoothstep(.2126*promedio.r+.7152*promedio.g+.0722*promedio.b,.001,.013):1;
       const margen=fileteFuente.value;
       if(fuente>=292/30 && fuente<345/30)margen.set(.055,.012);
@@ -180,7 +183,9 @@ export function crearProyeccion(scene, video, mono, roca) {
       if (media) {
         try {
           if (aceptaOpacidad) media.opacity = valor;
-          else componer(valor>=0.9999);
+          // La capa nativa no comparte el búfer de profundidad con la mano.
+          // Al coger el frasco, el mismo fotograma SBS pasa a la malla del muro.
+          componer(!primerPlano && (aceptaOpacidad || valor>=0.9999));
           // El cambio de composición queda activo en la siguiente imagen XR.
           // Nunca dibujar los dos núcleos en un mismo ojo durante el traspaso.
           mostrarEnMuro = !sesionMedia.renderState.layers?.includes(media);

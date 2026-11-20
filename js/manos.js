@@ -11,7 +11,7 @@ const siguiente=[5,2,3,4,4,6,7,8,9,9,11,12,13,14,14,16,17,18,19,19,21,22,23,24,2
 // llega desde el hombro al pulsador; los otros tres dedos rodean el vidrio.
 const contacto=[
   [.073,.016,.095],
-  [.039,.061,.047],[.028,.078,.029],[.004,.076,.024],[-.011,.072,.023],
+  [.056,.045,.060],[.049,.061,.037],[.032,.066,.025],[.023,.062,.024],
   [.063,.064,.047],[.043,.094,.004],[.030,.119,-.004],[.010,.119,-.003],[.001,.116,-.002],
   [.066,.052,.049],[.046,.075,.004],[.035,.076,-.027],[.009,.074,-.028],[-.006,.073,-.024],
   [.068,.040,.051],[.047,.056,.008],[.036,.055,-.023],[.013,.053,-.026],[-.004,.052,-.023],
@@ -28,9 +28,23 @@ export async function cargarMano(lado,material){
   const url=new URL('../vendor/meta-hands/'+lado+'.glb',import.meta.url);
   const {scene:modelo}=await new GLTFLoader().loadAsync(url.href);
   modelo.name='Mano Meta '+lado;
-  modelo.traverse(o=>{ if(o.isSkinnedMesh){o.material=material;o.frustumCulled=false;} });
+  modelo.traverse(o=>{
+    if(o.isSkinnedMesh){
+      o.material=material;o.frustumCulled=false;
+      // La pantalla dibuja su propia capa translúcida. Una mano del primer
+      // plano siempre compone después de esa capa; el vidrio conserva la profundidad.
+      o.renderOrder=61;
+    }
+  });
   const huesos=articulaciones.map(k=>modelo.getObjectByName(k));
   const reposo=huesos.map(h=>h.position.clone()),rotaciones=huesos.map(h=>h.quaternion.clone());
+  const atras= reposo[0].clone().sub(reposo[6].clone().lerp(reposo[21],.5)).normalize();
+  modelo.traverse(o=>{
+    if(!o.isSkinnedMesh)return;
+    const pos=o.geometry.attributes.position,distancias=new Float32Array(pos.count),vertice=new T.Vector3();
+    for(let i=0;i<pos.count;i++)distancias[i]=vertice.fromBufferAttribute(pos,i).sub(reposo[0]).dot(atras);
+    o.geometry.setAttribute('terminacion',new T.BufferAttribute(distancias,1));
+  });
   const s=lado==='right'?1:-1;
   const cerrado=contacto.map(([x,y,z])=>new T.Vector3(s*x,y,z));
   const basis=new T.Matrix4(), baseCerrada=new T.Matrix4();
@@ -44,7 +58,7 @@ export async function cargarMano(lado,material){
     const fuerza=T.MathUtils.clamp(cierre,0,1);
     for(let i=0;i<huesos.length;i++){
       const indice=i>=5&&i<10;
-      const peso=indice ? (sujeto?.82+.18*gatillo:.16+.84*gatillo) : .12+.88*fuerza;
+      const peso=indice ? (sujeto ? .82+.18*gatillo : .16+.84*gatillo) : .12+.88*fuerza;
       const p=huesos[i].position.copy(abierto[i]).lerp(cerrado[i],peso);
       if(sujeto&&i>=7&&i<=9)p.y+=.010*(1-gatillo)-.002*gatillo;
     }

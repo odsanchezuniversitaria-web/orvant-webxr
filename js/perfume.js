@@ -22,11 +22,39 @@ function entornoVidrio(){
   return textura;
 }
 
+function reflejoDeCerca(material,mapa,piel=false){
+  material.envMap=mapa;material.envMapIntensity=piel ? .9 : 1.55;
+  if(piel){material.transparent=true;material.depthWrite=true;}
+  // Las luces de las velas y el muro se leen en los objetos a escala de la mano.
+  // Un reflector amplio conserva la etiqueta durante los negros del comercial.
+  material.onBeforeCompile=shader=>{
+    if(piel){
+      shader.vertexShader='attribute float terminacion; varying float bordeMuneca;\n'+shader.vertexShader
+        .replace('#include <begin_vertex>','#include <begin_vertex>\n bordeMuneca=terminacion;');
+      shader.fragmentShader='varying float bordeMuneca;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>',
+        '#include <alphamap_fragment>\n diffuseColor.a*=1.-smoothstep(-.041,.006,bordeMuneca);if(diffuseColor.a<.014)discard;');
+    }
+    const fuerza=piel?'.34':'.97', filo=piel?'.013':'.043';
+    shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`
+      #include <emissivemap_fragment>
+      float velaCercana=max(dot(normal,normalize(vec3(-.53,.64,.62))),0.);
+      float paredCercana=max(dot(normal,normalize(vec3(.80,.23,.51))),0.);
+      float bordeCercano=pow(1.-abs(dot(normal,normalize(vViewPosition))),3.);
+      totalEmissiveRadiance += diffuseColor.rgb*${fuerza}*
+        (vec3(.21,.16,.13)+vec3(1.,.81,.59)*velaCercana+vec3(.41,.45,.5)*paredCercana)
+        +vec3(.88,.75,.59)*bordeCercano*${filo};
+    `);
+  };
+  material.customProgramCacheKey=()=>piel?'orvant-piel':'orvant-frasco';
+  material.needsUpdate=true;
+}
+
 export function crearPerfume(escena,camara,refrescar=()=>{}){
   const botella=new T.Group();botella.name='ORVANT interactivo';escena.add(botella);
   botella.position.copy(MESA);botella.quaternion.copy(ORIENTACION_MESA);
   const bruma=crearAtomizador(escena),mapa=entornoVidrio();
   const piel=new T.MeshStandardMaterial({color:0xb9a493,roughness:.71,metalness:0,envMap:mapa,envMapIntensity:1.05});
+  reflejoDeCerca(piel,mapa,true);
   const manos=new Map(),lados=new Map();
   const pistola=new T.Vector3(),direccion=new T.Vector3(),destino=new T.Vector3(),cursor=new T.Raycaster();
   const x=new T.Vector3(),y=new T.Vector3(),z=new T.Vector3(),matriz=new T.Matrix4();
@@ -39,7 +67,7 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
     modelo.traverse(o=>{
       if(!o.isMesh)return;
       for(const m of (Array.isArray(o.material)?o.material:[o.material])){
-        if(m.isMeshStandardMaterial){m.envMap=mapa;m.envMapIntensity=1.35;m.needsUpdate=true;}
+        if(m.isMeshStandardMaterial)reflejoDeCerca(m,mapa);
       }
     });
     cap=modelo.getObjectByName('Cap');pulsador=modelo.getObjectByName('Actuator');boquilla=modelo.getObjectByName('NozzleOrigin');
@@ -163,7 +191,9 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
         }
       }
     }else if(propietario===ESCRITORIO){
-      const pos=destino.set(.077,-.087,-.33).applyQuaternion(camara.quaternion).add(camara.position);
+      const semiancho=.33*Math.tan(T.MathUtils.degToRad(camara.fov*.5))*camara.aspect;
+      const lateral=T.MathUtils.clamp(semiancho-.067,0,.077);
+      const pos=destino.set(lateral,-.087,-.33).applyQuaternion(camara.quaternion).add(camara.position);
       rotacionVuelta.copy(camara.quaternion).multiply(rotacionPC);
       posarProducto(pos,rotacionVuelta);
       const h=lados.get('right');
@@ -191,6 +221,7 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
     apuntaPC(ndc){cursor.setFromCamera(ndc,camara);return !propietario&&cursor.ray.distanceToPoint(destino.copy(MESA).add(XYZ.set(0,.06,0)))<.071;},
     inicioSeleccion(fuente){if(propietario===fuente){selecciones.add(fuente);if(!fuente.hand)disparar(fuente);}},
     consumeSeleccion(fuente){const curso=selecciones.has(fuente)||propietario===fuente;selecciones.delete(fuente);return curso;},
+    get enMano(){return propietario!==null||volviendo;},
     get estado(){return {disponible,sujeto:propietario===ESCRITORIO?'escritorio':propietario?.handedness||'',volviendo,
       pulsos:numero,manos:lados.size,tapon:!!cap?.visible,direccion:direccion.toArray(),origen:pistola.toArray(),
       posicion:botella.position.toArray(),indice:manos.get(propietario)?.indice||false};}

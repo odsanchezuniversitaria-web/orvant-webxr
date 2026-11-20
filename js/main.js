@@ -370,7 +370,7 @@ function dibujar(ms, frame) {
   const zonas=muestrear(fuente,dt);
   perfume.actualizar(t,frame,sesion?renderer.xr.getReferenceSpace():null);
   if(debug)canvas.dataset.perfume=JSON.stringify(perfume.estado);
-  proyeccion.actualizar(luz,zonas.promedio,fuente);
+  proyeccion.actualizar(luz,zonas.promedio,fuente,perfume.enMano);
   mundo.actualizar(t,zonas.promedio,luz,ambiente,zonas);
   acabado?.(zonas.promedio,luz);
   renderer.render(scene,camara);

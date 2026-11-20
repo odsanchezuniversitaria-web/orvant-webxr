@@ -2,11 +2,11 @@ import * as T from 'three';
 
 // Cada pulsación conserva su origen y dirección en el mundo cuando la mano gira.
 export function crearAtomizador(escena){
-  const cantidad=6, porRafaga=95, posiciones=[],semillas=[],lotes=[];
+  const cantidad=6, porRafaga=95,semillas=[],lotes=[];
   let semilla=8829;
   const azar=()=>{semilla=(1664525*semilla+1013904223)>>>0;return semilla/4294967296;};
   for(let i=0;i<cantidad*porRafaga;i++){
-    posiciones.push(0,0,0);semillas.push(azar(),azar(),azar(),azar());
+    semillas.push(azar(),azar(),azar(),azar());
     lotes.push(Math.floor(i/porRafaga));
   }
   const geo=new T.InstancedBufferGeometry(),plano=new T.PlaneGeometry(1,1);
