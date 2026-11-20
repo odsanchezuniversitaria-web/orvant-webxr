@@ -8,6 +8,7 @@ import { crearPerfume } from './perfume.js';
 
 const $ = id => document.getElementById(id);
 const video = $('comercial'), acceso = $('acceso'), entrar = $('entrar'), carga = $('carga');
+const entrarMovil = $('entrar-movil'), reproduccionMovil = $('reproduccion-movil');
 const estado = $('estado'), ayuda = $('ayuda'), canvas = $('vista'), volver = $('volver');
 const q = new URLSearchParams(location.search);
 const archivos = { suave:'prueba_SBS_suave.mp4', media:'prueba_SBS_media.mp4', intensa:'prueba_SBS_intensa.mp4',
@@ -17,6 +18,8 @@ const peliculasCompletas = new Set(['final','final-hsbs','original']);
 const sinTramos = [];
 const candidato = q.get('video');
 let nivel = Object.hasOwn(archivos, candidato) ? candidato : 'final';
+let vistaMovil = false;
+const peliculaActiva = () => vistaMovil ? 'original' : nivel;
 let tramos = null, leyendoMontaje = false;
 let pideNitido = q.get('modo') === 'nitido';
 let debug = q.get('debug') === '1';
@@ -41,12 +44,24 @@ function actualizarEnlaceOriginal() {
 function cargarPelicula() {
   disponible=false; falloVideo=false;
   carga.hidden=false; carga.removeAttribute('value');
-  video.src='./video/'+archivos[nivel];
-  if (!peliculasCompletas.has(nivel) && !tramos?.length && !leyendoMontaje) {
+  const pelicula = peliculaActiva();
+  video.src='./video/'+archivos[pelicula];
+  proyeccion?.configurarFormato(pelicula==='original');
+  if (!peliculasCompletas.has(pelicula) && !tramos?.length && !leyendoMontaje) {
     leyendoMontaje=true;
     leerMontaje().then(datos=>{ tramos=datos; }).finally(()=>{ leyendoMontaje=false; });
   }
   estadoAcceso();
+}
+
+function elegirVista(movil) {
+  if (vistaMovil === movil) return;
+  const anterior = peliculaActiva();
+  vistaMovil = movil;
+  if (anterior !== peliculaActiva()) cargarPelicula();
+  yaw = 0;
+  pitch = movil ? 0.19 : 0.07;
+  if (camara) { orientarPC(); resize(); }
 }
 
 $('pelicula').value=nivel;
@@ -77,7 +92,9 @@ $('opciones').addEventListener('change',()=>{
 });
 
 function estadoAcceso() {
-  if (activo || ocupado || !comprobadoXR) return;
+  if (activo || ocupado) return;
+  entrarMovil.disabled = false;
+  if (!comprobadoXR) return;
   const tiempo = Number.isFinite(video.duration) && video.duration > 0;
   let cargado = 0;
   if (tiempo && video.buffered.length) cargado = video.buffered.end(0)/video.duration;
@@ -96,7 +113,7 @@ function estadoAcceso() {
   entrar.disabled = !(disponible || falloVideo);
   $('original').hidden = !falloVideo || nivel==='original';
   ayuda.textContent = admiteVR ? 'El frasco está a tu derecha. Acerca la mano, mantén el botón lateral de agarre y pulsa el gatillo para pulverizar. Con seguimiento de manos, junta pulgar y medio para agarrar y toca la boquilla con el índice. Con la mano libre, el gatillo pausa la película.'
-      : 'Arrastra para mirar. Usa Tomar ORVANT para probar el perfume y la barra espaciadora para pausar la película.';
+      : 'En el teléfono, elige «Ver en móvil» para ver una sola imagen. Arrastra para mirar y toca «Tomar ORVANT» para probar el perfume.';
   if (!window.isSecureContext) ayuda.textContent = 'Abre la dirección HTTPS del servidor para usar el visor.';
 }
 
@@ -110,7 +127,7 @@ video.addEventListener('error', () => {
   if (!video.error) return;
   // Algunos decodificadores solo admiten la anchura de la copia HSBS.
   // Ambas versiones tienen exactamente la misma edición y profundidad.
-  if(nivel==='final' && !renderer && !ocupado){
+  if(peliculaActiva()==='final' && !ocupado && !activo){
     nivel='final-hsbs'; $('pelicula').value=nivel;
     cargarPelicula();
     return;
@@ -144,7 +161,7 @@ function construir() {
   orientarPC();
   mundo = crearMundo(scene);
   perfume = crearPerfume(scene,camara,actualizarPerfumePC);
-  proyeccion = crearProyeccion(scene,video,nivel==='original',mundo.piedraProyeccion);
+  proyeccion = crearProyeccion(scene,video,peliculaActiva()==='original',mundo.piedraProyeccion);
   muestrear = crearMuestreo();
   acabado = crearAcabado(scene,q.get('post')!=='0');
   if (debug) medidas = crearPanelMedidas(scene);
@@ -170,6 +187,10 @@ function orientarPC() {
 function resize() {
   if (!renderer || renderer.xr.isPresenting) return;
   camara.aspect = innerWidth/Math.max(innerHeight,1);
+  // Conserva el ancho del muro incluso cuando el teléfono gira a vertical.
+  camara.fov = vistaMovil
+    ? Math.max(46, THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(26))/camara.aspect)))
+    : 65;
   camara.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight,false);
 }
@@ -218,6 +239,12 @@ function actualizarPerfumePC(){
 $('tomar').addEventListener('click',()=>perfume?.tomarPC());
 $('pulverizar').addEventListener('click',()=>perfume?.pulverizarPC());
 $('dejar').addEventListener('click',()=>perfume?.soltarPC());
+function actualizarReproduccionMovil() {
+  reproduccionMovil.hidden = !activo || !vistaMovil || !intentoHecho;
+  reproduccionMovil.textContent = video.ended ? 'Volver a ver' : video.paused ? 'Reproducir' : 'Pausar';
+}
+for (const evento of ['play','pause','ended']) video.addEventListener(evento,actualizarReproduccionMovil);
+reproduccionMovil.addEventListener('click',alternar);
 function empezar() {
   activo = true;
   inicio = previo = encendido = apagado = null;
@@ -227,6 +254,7 @@ function empezar() {
   bitsProfundidad=null;
   acceso.hidden = true;
   volver.hidden = !!sesion;
+  actualizarReproduccionMovil();
   actualizarPerfumePC();
   $('mensaje').hidden = true;
   if (falloVideo && !sesion) informar('Vista de la cantera. El comercial seleccionado está pendiente.');
@@ -242,6 +270,8 @@ function terminar() {
   proyeccion?.cerrar();
   video.pause();
   if (disponible) video.currentTime = 0;
+  elegirVista(false);
+  actualizarReproduccionMovil();
   acceso.hidden = false; volver.hidden = true; $('mensaje').hidden = true;
   orientarPC(); resize(); estadoAcceso();
   if (lectura) estado.textContent = lectura + ' · '+avisoModo;
@@ -249,17 +279,25 @@ function terminar() {
 volver.addEventListener('click',terminar);
 function solicitarRecentrado() { referenciaPendiente=true; }
 
-entrar.addEventListener('click',async () => {
+async function abrirSala(movil) {
   if (ocupado || activo) return;
-  ocupado=true; entrar.disabled = true;
+  ocupado=true; entrar.disabled = entrarMovil.disabled = true;
   let pedida;
   try {
+    elegirVista(movil);
     // Solicitar XR bajo el gesto, antes de esperar módulos, GPU o promesas de audio.
-    if (admiteVR) {
+    if (!movil && admiteVR) {
       pedida = navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local'],optionalFeatures:['layers','hand-tracking']});
       pedida.catch(()=>{});
     }
-    if (disponible) {
+    let audioMovil;
+    if (movil) {
+      // Invocar play durante el toque también cuando el MP4 acaba de cambiar.
+      audioMovil = video.play().then(()=>{
+        video.pause();
+        video.currentTime = 0;
+      }).catch(()=>{});
+    } else if (disponible) {
       video.play().catch(()=>{});
       video.pause();
     }
@@ -281,17 +319,21 @@ entrar.addEventListener('click',async () => {
     }
     estado.textContent='Preparando la iluminación de la sala…';
     const solicitada=sesion;
-    await prepararProgramas();
+    await Promise.all([prepararProgramas(), audioMovil]);
     if (pedida && (!sesion || sesion!==solicitada)) return;
     empezar();
   } catch (error) {
     const pendiente = sesion || (pedida && await pedida.catch(()=>null));
     if (pendiente) await pendiente.end().catch(()=>{});
+    video.pause();
+    elegirVista(false);
     estado.textContent = 'No se pudo abrir la sala. '+(error.message || error.name);
   } finally {
-    ocupado=false; entrar.disabled = false;
+    ocupado=false; entrar.disabled = !(disponible || falloVideo); entrarMovil.disabled = false;
   }
-});
+}
+entrar.addEventListener('click',()=>abrirSala(false));
+entrarMovil.addEventListener('click',()=>abrirSala(true));
 
 function centrar(frame) {
   const pose = frame.getViewerPose(referenciaBase);
@@ -315,10 +357,12 @@ async function reproducir(reinicia=false) {
   try {
     await video.play();
     if (token !== intentoPlay) return;
+    if (vistaMovil) $('mensaje').hidden = true;
     if (reinicia || encendido === null) encendido = ahora();
   } catch (e) {
     if (e.name !== 'AbortError' && token === intentoPlay)
-      informar('Pulsa el gatillo o la barra espaciadora para activar el audio y la reproducción.');
+      informar(vistaMovil ? 'Toca «Reproducir» para activar el comercial con sonido.'
+        : 'Pulsa el gatillo o la barra espaciadora para activar el audio y la reproducción.');
   }
 }
 function alternar() {
@@ -372,11 +416,11 @@ function dibujar(ms, frame) {
   const edad=t-inicio, dt=Math.min(Math.max(t-previo,0),0.25); previo=t;
   negro.material.uniforms.alfa.value = 1-suave(edad/2);
   negro.visible = edad<2;
-  if (edad>=3 && !intentoHecho) {intentoHecho=true; reproducir();}
+  if (edad>=3 && !intentoHecho) {intentoHecho=true; actualizarReproduccionMovil(); reproducir();}
   if (sesion) controlesXR();
   let luz = encendido===null ? 0 : suave(t-encendido);
   if (apagado !== null) luz *= 1-suave(t-apagado);
-  const montaje = peliculasCompletas.has(nivel) ? null : tramos || sinTramos;
+  const montaje = peliculasCompletas.has(peliculaActiva()) ? null : tramos || sinTramos;
   const fuente = tiempoFuente(video.currentTime,montaje);
   const epilogo = apagado!==null && video.ended ? Math.max(0,t-apagado) : 0;
   const ambiente = ambienteEn(video.currentTime,montaje,undefined,epilogo);

@@ -88,9 +88,12 @@ const fragmento = `
 `;
 
 export function crearProyeccion(scene, video, mono, roca) {
-  const textura = new THREE.VideoTexture(video);
-  // El shader trabaja sobre muestras de vídeo codificadas y convierte una sola vez al final.
-  textura.colorSpace = THREE.NoColorSpace;
+  function texturaVideo() {
+    const textura = new THREE.VideoTexture(video);
+    textura.colorSpace = THREE.NoColorSpace;
+    return textura;
+  }
+  let textura = texturaVideo();
   const texel = new THREE.Vector2(1/3840, 1/1080);
   video.addEventListener('loadedmetadata', () => texel.set(1/video.videoWidth, 1/video.videoHeight));
   if (video.videoWidth) texel.set(1/video.videoWidth, 1/video.videoHeight);
@@ -158,6 +161,17 @@ export function crearProyeccion(scene, video, mono, roca) {
   }
 
   return {
+    configurarFormato(esMono) {
+      if (esMono === mono) return;
+      mono = esMono;
+      const anterior = textura;
+      textura = texturaVideo();
+      for (const plano of planos) {
+        plano.material.uniforms.pelicula.value = textura;
+        plano.material.uniforms.fraccion.value = mono ? 1 : 0.5;
+      }
+      anterior.dispose();
+    },
     configurarEspacio(sesion, espacio) {
       if (!media) iniciarMedia(sesion, espacio);
       else {
