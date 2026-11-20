@@ -11,10 +11,12 @@ const video = $('comercial'), acceso = $('acceso'), entrar = $('entrar'), carga 
 const estado = $('estado'), ayuda = $('ayuda'), canvas = $('vista'), volver = $('volver');
 const q = new URLSearchParams(location.search);
 const archivos = { suave:'prueba_SBS_suave.mp4', media:'prueba_SBS_media.mp4', intensa:'prueba_SBS_intensa.mp4',
-  final:'perfume_3D_SBS_3840x1080.mp4', hsbs:'prueba_SBS_hsbs.mp4', original:'perfume_original_2D.mp4' };
+  final:'perfume_3D_SBS_3840x1080.mp4', 'final-hsbs':'perfume_3D_HSBS_1920x1080.mp4',
+  hsbs:'prueba_SBS_hsbs.mp4', original:'perfume_original_2D.mp4' };
+const peliculasCompletas = new Set(['final','final-hsbs','original']);
 const sinTramos = [];
-let candidato = q.get('video');
-let nivel = Object.hasOwn(archivos, candidato) ? candidato : 'media';
+const candidato = q.get('video');
+let nivel = Object.hasOwn(archivos, candidato) ? candidato : 'final';
 let tramos = null, leyendoMontaje = false;
 let pideNitido = q.get('modo') === 'nitido';
 let debug = q.get('debug') === '1';
@@ -40,14 +42,13 @@ function cargarPelicula() {
   disponible=false; falloVideo=false;
   carga.hidden=false; carga.removeAttribute('value');
   video.src='./video/'+archivos[nivel];
-  if (nivel!=='original' && nivel!=='final' && !tramos?.length && !leyendoMontaje) {
+  if (!peliculasCompletas.has(nivel) && !tramos?.length && !leyendoMontaje) {
     leyendoMontaje=true;
     leerMontaje().then(datos=>{ tramos=datos; }).finally(()=>{ leyendoMontaje=false; });
   }
   estadoAcceso();
 }
 
-if (nivel==='final') $('pelicula').add(new Option('Comercial completo · 3D','final'));
 $('pelicula').value=nivel;
 $('modo').value=pideNitido ? 'nitido' : 'proyeccion';
 $('contador').checked=debug;
@@ -71,7 +72,7 @@ $('opciones').addEventListener('change',()=>{
   }
   history.replaceState(null,'',ruta.href);
   actualizarEnlaceOriginal();
-  candidato=siguiente; pideNitido=$('modo').value==='nitido'; debug=$('contador').checked;
+  pideNitido=$('modo').value==='nitido'; debug=$('contador').checked;
   if (siguiente!==nivel) { nivel=siguiente; cargarPelicula(); }
 });
 
@@ -81,12 +82,15 @@ function estadoAcceso() {
   let cargado = 0;
   if (tiempo && video.buffered.length) cargado = video.buffered.end(0)/video.duration;
   if (disponible || cargado) carga.value = cargado;
+  const titulo=$('pelicula').selectedOptions[0].textContent;
   if (falloVideo) {
-    estado.textContent = 'El comercial «'+nivel+'» no está disponible en esta carpeta.';
+    estado.textContent = 'No se pudo reproducir «'+titulo+'». Puedes elegir otra versión.';
     entrar.textContent = 'Ver la cantera';
     carga.hidden = true;
   } else {
-    estado.textContent = disponible ? (nivel==='original' ? 'Comercial original en 2D · sala preparada.' : 'Comercial estéreo · '+nivel+'.') : 'Cargando el comercial…';
+    const duracion=tiempo && peliculasCompletas.has(nivel)
+      ? ' · '+video.duration.toLocaleString('es',{maximumFractionDigits:1})+' s' : '';
+    estado.textContent = disponible ? titulo+duracion : 'Cargando «'+titulo+'»…';
     entrar.textContent = 'Entrar';
   }
   entrar.disabled = !(disponible || falloVideo);
@@ -97,10 +101,19 @@ function estadoAcceso() {
 }
 
 video.addEventListener('progress',estadoAcceso);
-video.addEventListener('canplay', () => { disponible = true; falloVideo = false; estadoAcceso(); });
+// Con metadatos se puede entrar y activar el audio. play() espera los cuadros
+// que necesite el decodificador mientras la sala hace su fundido de entrada.
+function habilitarPelicula() { disponible = true; falloVideo = false; estadoAcceso(); }
+video.addEventListener('loadedmetadata', habilitarPelicula);
+video.addEventListener('canplay', habilitarPelicula);
 video.addEventListener('error', () => {
-  if (!candidato && nivel==='media' && !activo) {
-    nivel='original'; $('pelicula').value=nivel; cargarPelicula(); return;
+  if (!video.error) return;
+  // Algunos decodificadores solo admiten la anchura de la copia HSBS.
+  // Ambas versiones tienen exactamente la misma edición y profundidad.
+  if(nivel==='final' && !renderer && !ocupado){
+    nivel='final-hsbs'; $('pelicula').value=nivel;
+    cargarPelicula();
+    return;
   }
   falloVideo = true; disponible = false; estadoAcceso();
   if (activo) informar('El comercial se interrumpió. Comprueba el archivo y la conexión.');
@@ -363,7 +376,7 @@ function dibujar(ms, frame) {
   if (sesion) controlesXR();
   let luz = encendido===null ? 0 : suave(t-encendido);
   if (apagado !== null) luz *= 1-suave(t-apagado);
-  const montaje = nivel==='original' || nivel==='final' ? null : tramos || sinTramos;
+  const montaje = peliculasCompletas.has(nivel) ? null : tramos || sinTramos;
   const fuente = tiempoFuente(video.currentTime,montaje);
   const epilogo = apagado!==null && video.ended ? Math.max(0,t-apagado) : 0;
   const ambiente = ambienteEn(video.currentTime,montaje,undefined,epilogo);

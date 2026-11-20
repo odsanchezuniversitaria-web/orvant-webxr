@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#0a0908">
   <title>La cantera · Proyección privada</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./interfaz.css?v=bdf41edaecdc">
-  <script type="importmap">{"imports": {"three": "./vendor/three/three.module.min.js", "./js/acabado.js": "./js/acabado.js?v=bdf41edaecdc", "./js/atomizador.js": "./js/atomizador.js?v=bdf41edaecdc", "./js/campana.js": "./js/campana.js?v=bdf41edaecdc", "./js/estelas.js": "./js/estelas.js?v=bdf41edaecdc", "./js/flores.js": "./js/flores.js?v=bdf41edaecdc", "./js/main.js": "./js/main.js?v=bdf41edaecdc", "./js/manos.js": "./js/manos.js?v=bdf41edaecdc", "./js/materiales.js": "./js/materiales.js?v=bdf41edaecdc", "./js/medidas.js": "./js/medidas.js?v=bdf41edaecdc", "./js/modelo-blender.js": "./js/modelo-blender.js?v=bdf41edaecdc", "./js/mundo.js": "./js/mundo.js?v=bdf41edaecdc", "./js/perfume-modelo.js": "./js/perfume-modelo.js?v=bdf41edaecdc", "./js/perfume.js": "./js/perfume.js?v=bdf41edaecdc", "./js/proyeccion.js": "./js/proyeccion.js?v=bdf41edaecdc", "./js/sincronizar.js": "./js/sincronizar.js?v=bdf41edaecdc", "./js/velas.js": "./js/velas.js?v=bdf41edaecdc"}}</script>
+  <link rel="stylesheet" href="./interfaz.css?v=ecd15c0ea581">
+  <script type="importmap">{"imports": {"three": "./vendor/three/three.module.min.js", "./js/acabado.js": "./js/acabado.js?v=ecd15c0ea581", "./js/atomizador.js": "./js/atomizador.js?v=ecd15c0ea581", "./js/campana.js": "./js/campana.js?v=ecd15c0ea581", "./js/estelas.js": "./js/estelas.js?v=ecd15c0ea581", "./js/flores.js": "./js/flores.js?v=ecd15c0ea581", "./js/main.js": "./js/main.js?v=ecd15c0ea581", "./js/manos.js": "./js/manos.js?v=ecd15c0ea581", "./js/materiales.js": "./js/materiales.js?v=ecd15c0ea581", "./js/medidas.js": "./js/medidas.js?v=ecd15c0ea581", "./js/modelo-blender.js": "./js/modelo-blender.js?v=ecd15c0ea581", "./js/mundo.js": "./js/mundo.js?v=ecd15c0ea581", "./js/perfume-modelo.js": "./js/perfume-modelo.js?v=ecd15c0ea581", "./js/perfume.js": "./js/perfume.js?v=ecd15c0ea581", "./js/proyeccion.js": "./js/proyeccion.js?v=ecd15c0ea581", "./js/sincronizar.js": "./js/sincronizar.js?v=ecd15c0ea581", "./js/velas.js": "./js/velas.js?v=ecd15c0ea581"}}</script>
 </head>
 <body>
   <canvas id="vista" aria-label="Vista de la cantera"></canvas>
@@ -24,11 +24,13 @@
         <div class="ajustes">
           <label for="pelicula">Película</label>
           <select id="pelicula">
-            <option value="suave">Prueba 3D · suave</option>
-            <option value="media">Prueba 3D · media</option>
-            <option value="intensa">Prueba 3D · intensa</option>
-            <option value="original">Comercial original · 2D</option>
-            <option value="hsbs">Prueba 3D · media ligera (HSBS)</option>
+            <option value="final" selected>Comercial completo en 3D · profundidad media</option>
+            <option value="final-hsbs">Comercial completo en 3D · media ligera (HSBS)</option>
+            <option value="original">Comercial completo original en 2D</option>
+            <option value="suave">Prueba de 10 s en 3D · suave</option>
+            <option value="media">Prueba de 10 s en 3D · media</option>
+            <option value="intensa">Prueba de 10 s en 3D · intensa</option>
+            <option value="hsbs">Prueba de 10 s en 3D · media ligera (HSBS)</option>
           </select>
           <label for="modo">Proyección</label>
           <select id="modo">
@@ -49,6 +51,6 @@
   <output id="mensaje" hidden aria-live="polite"></output>
   <video id="comercial" playsinline preload="auto" hidden></video>
   <noscript>Activa JavaScript para entrar en la cantera.</noscript>
-  <script type="module" src="./js/main.js?v=bdf41edaecdc"></script>
+  <script type="module" src="./js/main.js?v=ecd15c0ea581"></script>
 </body>
 </html>
