@@ -6,23 +6,49 @@ const dedos=['thumb','index-finger','middle-finger','ring-finger','pinky-finger'
 export const articulaciones=['wrist',...dedos.flatMap((dedo,i)=>
   (i===0?['metacarpal','phalanx-proximal','phalanx-distal','tip']:
     ['metacarpal','phalanx-proximal','phalanx-intermediate','phalanx-distal','tip']).map(k=>dedo+'-'+k))];
-const siguiente=[5,2,3,4,4,6,7,8,9,9,11,12,13,14,14,16,17,18,19,19,21,22,23,24,24];
+const cadenas=[[1,4],[6,9],[11,14],[16,19],[21,24]];
 // Posiciones de contacto en metros respecto a la base del frasco. El índice
 // llega desde el hombro al pulsador; los otros tres dedos rodean el vidrio.
 const contacto=[
   [.073,.016,.095],
   [.056,.045,.060],[.049,.061,.037],[.032,.066,.025],[.023,.062,.024],
-  [.063,.064,.047],[.043,.094,.004],[.030,.119,-.004],[.010,.119,-.003],[.001,.116,-.002],
+  [.063,.064,.047],[.043,.094,.004],[.024,.125,-.018],[.006,.127,-.003],[.001,.116,-.002],
   [.066,.052,.049],[.046,.075,.004],[.035,.076,-.027],[.009,.074,-.028],[-.006,.073,-.024],
   [.068,.040,.051],[.047,.056,.008],[.036,.055,-.023],[.013,.053,-.026],[-.004,.052,-.023],
   [.068,.030,.058],[.046,.037,.014],[.038,.034,-.012],[.020,.032,-.022],[.006,.031,-.023]
 ];
+const ejeX=new T.Vector3(),ejeY=new T.Vector3(),ejeZ=new T.Vector3();
 function basePalma(matriz,puntos){
-  const ejeY=new T.Vector3().subVectors(puntos[6],puntos[21]).normalize();
-  const ejeZ=new T.Vector3().subVectors(puntos[0],puntos[11]);
-  const ejeX=new T.Vector3().crossVectors(ejeY,ejeZ).normalize();
+  ejeY.subVectors(puntos[6],puntos[21]);
+  if(ejeY.lengthSq()<1e-6)return false;
+  ejeY.normalize();
+  ejeZ.subVectors(puntos[0],puntos[11]);
+  ejeX.crossVectors(ejeY,ejeZ);
+  if(ejeX.lengthSq()<1e-6)return false;
+  ejeX.normalize();
   ejeZ.crossVectors(ejeX,ejeY).normalize();
-  return matriz.makeBasis(ejeX,ejeY,ejeZ);
+  matriz.makeBasis(ejeX,ejeY,ejeZ);
+  return true;
+}
+
+// Ajusta los dedos una vez al cargar el GLB. Conserva las longitudes de cada
+// falange mientras la yema alcanza el vidrio o el pulsador (FABRIK).
+function ajustarDedo(pose,abierto,base,punta){
+  const meta=pose[punta].clone(),delta=new T.Vector3();
+  const largos=abierto.slice(base,punta).map((p,i)=>p.distanceTo(abierto[base+i+1]));
+  for(let paso=0;paso<32;paso++){
+    pose[punta].copy(meta);
+    for(let i=punta-1;i>=base;i--){
+      delta.subVectors(pose[i],pose[i+1]).setLength(largos[i-base]);
+      pose[i].copy(pose[i+1]).add(delta);
+    }
+    pose[base].copy(abierto[base]);
+    for(let i=base;i<punta;i++){
+      delta.subVectors(pose[i+1],pose[i]).setLength(largos[i-base]);
+      pose[i+1].copy(pose[i]).add(delta);
+    }
+    if(pose[punta].distanceToSquared(meta)<1e-10)break;
+  }
 }
 export async function cargarMano(lado,material){
   const url=new URL('../vendor/meta-hands/'+lado+'.glb',import.meta.url);
@@ -47,27 +73,60 @@ export async function cargarMano(lado,material){
   });
   const s=lado==='right'?1:-1;
   const cerrado=contacto.map(([x,y,z])=>new T.Vector3(s*x,y,z));
-  const basis=new T.Matrix4(), baseCerrada=new T.Matrix4();
-  const alineacion=new T.Quaternion().setFromRotationMatrix(
-    basePalma(baseCerrada,cerrado).multiply(basePalma(basis,reposo).invert()));
-  const abierto=reposo.map(p=>p.clone().sub(reposo[0]).applyQuaternion(alineacion).add(cerrado[0]));
-  const direcciones=abierto.map((p,i)=>new T.Vector3().subVectors(abierto[siguiente[i]],p).normalize());
+  const basis=new T.Matrix4();
+  basePalma(basis,cerrado);
+  const palmaEnFrasco=new T.Quaternion().setFromRotationMatrix(basis);
+  basePalma(basis,reposo);
+  const alineacion=palmaEnFrasco.clone().multiply(new T.Quaternion().setFromRotationMatrix(basis).invert());
+  const nudilloMedio=cerrado[11].clone();
+  const abierto=reposo.map(p=>p.clone().sub(reposo[11]).applyQuaternion(alineacion).add(nudilloMedio));
   const rotBase=rotaciones.map(r=>alineacion.clone().multiply(r));
-  const u=new T.Vector3(),correccion=new T.Quaternion();
-  function mando(cierre,gatillo,sujeto){
-    const fuerza=T.MathUtils.clamp(cierre,0,1);
-    for(let i=0;i<huesos.length;i++){
-      const indice=i>=5&&i<10;
-      const peso=indice ? (sujeto ? .82+.18*gatillo : .16+.84*gatillo) : .12+.88*fuerza;
-      const p=huesos[i].position.copy(abierto[i]).lerp(cerrado[i],peso);
-      if(sujeto&&i>=7&&i<=9)p.y+=.010*(1-gatillo)-.002*gatillo;
+  const indiceAlto=cerrado.map(p=>p.clone());
+  indiceAlto[7].y+=.004;indiceAlto[8].y+=.008;indiceAlto[9].y+=.010;
+  ajustarDedo(indiceAlto,abierto,6,9);
+  for(const [base,punta] of cadenas)ajustarDedo(cerrado,abierto,base,punta);
+  const centroAgarre=new T.Vector3();
+  for(const i of [11,14,16,19])centroAgarre.add(cerrado[i]);
+  centroAgarre.multiplyScalar(.25);
+
+  // WebXR sitúa -Z del gripSpace hacia el pulgar y +Y hacia el antebrazo.
+  // En nuestra base anatómica esos ejes son +Y y +Z respectivamente.
+  const inversaPalma=palmaEnFrasco.clone().invert();
+  const frascoEnMando=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2).multiply(inversaPalma);
+  const offset=new T.Vector3();
+  function desdeMando(transform,grupo,rot){
+    const {x,y,z,w}=transform.orientation;
+    rot.set(x,y,z,w).multiply(frascoEnMando);
+    grupo.copy(transform.position).sub(offset.copy(centroAgarre).applyQuaternion(rot));
+  }
+  function desdeArticulaciones(puntos,grupo,rot){
+    if(!basePalma(basis,puntos))return false;
+    rot.setFromRotationMatrix(basis).multiply(inversaPalma);
+    grupo.copy(puntos[11]).sub(offset.copy(nudilloMedio).applyQuaternion(rot));
+    return true;
+  }
+
+  const falanges=[],identidad=new T.Quaternion(),giro=new T.Quaternion(),accion=new T.Quaternion();
+  for(const [base,punta] of cadenas){
+    for(let i=base;i<punta;i++){
+      const segmento=abierto[i+1].clone().sub(abierto[i]),dir=segmento.clone().normalize();
+      const apuntar=p=>new T.Quaternion().setFromUnitVectors(dir,p[i+1].clone().sub(p[i]).normalize());
+      falanges.push({i,segmento,flexion:apuntar(cerrado),alto:base===6?apuntar(indiceAlto):null,final:i+1===punta});
     }
+  }
+  function mando(cierre,gatillo){
+    const fuerza=T.MathUtils.clamp(cierre,0,1),presion=T.MathUtils.clamp(gatillo,0,1);
+    // La muñeca y el arco de nudillos siempre conservan la forma de la palma del GLB.
     for(let i=0;i<huesos.length;i++){
-      const hijo=siguiente[i], h=huesos[i];
-      if(hijo===i){h.quaternion.copy(huesos[i-1].quaternion);continue;}
-      u.subVectors(huesos[hijo].position,h.position).normalize();
-      correccion.setFromUnitVectors(direcciones[i],u);
-      h.quaternion.copy(correccion).multiply(rotBase[i]);
+      huesos[i].position.copy(abierto[i]);huesos[i].quaternion.copy(rotBase[i]);
+    }
+    for(const {i,segmento,flexion,alto,final} of falanges){
+      if(alto)accion.slerpQuaternions(alto,flexion,presion);
+      const peso=alto ? .16+.84*Math.max(fuerza,presion) : .12+.88*fuerza;
+      giro.slerpQuaternions(identidad,alto?accion:flexion,peso);
+      huesos[i].quaternion.copy(giro).multiply(rotBase[i]);
+      huesos[i+1].position.copy(segmento).applyQuaternion(giro).add(huesos[i].position);
+      if(final)huesos[i+1].quaternion.copy(giro).multiply(rotBase[i+1]);
     }
   }
   function rastreada(frame,fuente,espacio,puntos){
@@ -82,5 +141,5 @@ export async function cargarMano(lado,material){
     }
     return true;
   }
-  return {modelo,mando,rastreada};
+  return {modelo,mando,rastreada,desdeMando,desdeArticulaciones,centroAgarre};
 }

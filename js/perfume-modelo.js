@@ -1,6 +1,6 @@
 import { GLTFLoader } from '../vendor/three/loaders/GLTFLoader.js';
 
-const recurso = new URL('../modelos/orvant.glb?v=c548c3f7e70e', import.meta.url);
+const recurso = new URL('../modelos/orvant.glb?v=a3532c76e043', import.meta.url);
 let plantilla;
 
 export async function cargarModeloPerfume() {

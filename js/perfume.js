@@ -24,7 +24,13 @@ function entornoVidrio(){
 
 function reflejoDeCerca(material,mapa,piel=false){
   material.envMap=mapa;material.envMapIntensity=piel ? .9 : 1.55;
-  if(piel){material.transparent=true;material.depthWrite=true;}
+  if(piel){
+    // Se compone delante del muro. La cobertura suaviza solo el extremo
+    // de la muñeca, sin superponer las caras de la palma y del pulgar.
+    material.transparent=true;
+    material.alphaToCoverage=true;
+    material.depthWrite=true;
+  }
   // Las luces de las velas y el muro se leen en los objetos a escala de la mano.
   // Un reflector amplio conserva la etiqueta durante los negros del comercial.
   material.onBeforeCompile=shader=>{
@@ -32,7 +38,7 @@ function reflejoDeCerca(material,mapa,piel=false){
       shader.vertexShader='attribute float terminacion; varying float bordeMuneca;\n'+shader.vertexShader
         .replace('#include <begin_vertex>','#include <begin_vertex>\n bordeMuneca=terminacion;');
       shader.fragmentShader='varying float bordeMuneca;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>',
-        '#include <alphamap_fragment>\n diffuseColor.a*=1.-smoothstep(-.041,.006,bordeMuneca);if(diffuseColor.a<.014)discard;');
+        '#include <alphamap_fragment>\n diffuseColor.a*=1.-smoothstep(-.009,.006,bordeMuneca);if(diffuseColor.a<.014)discard;');
     }
     const fuerza=piel?'.34':'.97', filo=piel?'.013':'.043';
     shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`
@@ -57,7 +63,6 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
   reflejoDeCerca(piel,mapa,true);
   const manos=new Map(),lados=new Map();
   const pistola=new T.Vector3(),direccion=new T.Vector3(),destino=new T.Vector3(),cursor=new T.Raycaster();
-  const x=new T.Vector3(),y=new T.Vector3(),z=new T.Vector3(),matriz=new T.Matrix4();
   const inicioVuelta=new T.Vector3(),rotacionVuelta=new T.Quaternion();
   const rotacionPC=new T.Quaternion().setFromEuler(new T.Euler(-.08,-.13,-.07));
   let propietario=null,volviendo=false,inicioRetorno=0,t=0,numero=0,ultimo=-20;
@@ -140,27 +145,22 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
     if(fuente.hand){
       mano.modelo.position.set(0,0,0);mano.modelo.quaternion.identity();
       if(!mano.rastreada(frame,fuente,espacio,p))return false;
-      y.subVectors(p[6],p[21]).normalize();z.subVectors(p[0],p[11]);
-      x.crossVectors(y,z).normalize();z.crossVectors(x,y).normalize();
-      rot.setFromRotationMatrix(matriz.makeBasis(x,y,z));
-      grupo.copy(p[11]).add(XYZ.set(fuente.handedness==='right'?-.046:.046,-.075,-.004).applyQuaternion(rot));
+      if(!mano.desdeArticulaciones(p,grupo,rot))return false;
       agarre=p[4].distanceTo(p[14])<(estado.agarre?.053:.030);
       indice=false;
     }else{
       const pose=fuente.gripSpace&&frame.getPose(fuente.gripSpace,espacio);
       if(!pose)return false;
-      const {position,orientation}=pose.transform;
-      rot.set(orientation.x,orientation.y,orientation.z,orientation.w);
-      grupo.set(position.x,position.y,position.z).add(XYZ.set(fuente.handedness==='right'?-.039:.039,-.051,-.013).applyQuaternion(rot));
+      mano.desdeMando(pose.transform,grupo,rot);
       const valores=fuente.gamepad?.buttons, palanca=valores?.[1]?.value||0, gatillo=valores?.[0]?.value||0;
       agarre=palanca>(estado.agarre?.30:.57);
       indice=gatillo>(estado.indice?.30:.58);
       mano.modelo.position.copy(grupo);mano.modelo.quaternion.copy(rot);
-      mano.mando(propietario===fuente?1:palanca,gatillo,propietario===fuente);
+      mano.mando(propietario===fuente?1:palanca,gatillo);
     }
     mano.modelo.visible=true;estado.ultimoSeguimiento=t;
     if(agarre&&!estado.agarre&&!propietario&&!volviendo){
-      XYZ.copy(grupo);XYZ.y+=.052;
+      XYZ.copy(mano.centroAgarre).applyQuaternion(rot).add(grupo);
       if(cerca(XYZ,frame,fuente,espacio))adquirir(fuente);
     }
     if(propietario===fuente){
@@ -199,7 +199,7 @@ export function crearPerfume(escena,camara,refrescar=()=>{}){
       const h=lados.get('right');
       if(h){
         h.modelo.visible=true;h.modelo.position.copy(pos);h.modelo.quaternion.copy(rotacionVuelta);
-        h.mando(1,Math.max(0,1-(t-ultimo)/.14),true);
+        h.mando(1,Math.max(0,1-(t-ultimo)/.14));
       }
     }
     if(volviendo){
